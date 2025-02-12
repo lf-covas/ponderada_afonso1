@@ -1,0 +1,339 @@
+---
+title: "first_ponderada"
+author: "Luiz Covas"
+date: "2025-02-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Preparando o Ambiente
+
+Nosso grupo decidiu separar um dataframe para cada indivíduo, permitindo uma análise individualizada e um entendimento mais detalhado de cada conjunto de dados.
+
+Para realizar a análise exploratória, utilizaremos as bibliotecas listadas abaixo, essenciais para a criação de gráficos e a manipulação dos dados. Portanto, é necessário instalá-las previamente.
+
+```{r}
+# Carregue pacotes essenciais
+library(ggplot2)     # Para gráficos
+library(dplyr)       # Para manipulação de dados
+library(corrplot)    # Para visualizar a matriz de correlação
+library(scales)
+
+# Se optar por PCA com FactoMineR, carregue também:
+library(FactoMineR)
+library(factoextra)  # Para visualizações de PCA
+```
+
+# Importação e Visualização dos Dados
+
+O formato do seu conjunto de dados (CSV, Excel, etc.) determinará a função mais adequada para a importação. Abaixo você pode ver a utilização da função para leitura de CSV que é o nosso caso.
+
+dados \<- read.csv("seu_arquivo.csv", header = TRUE, sep = ",")
+
+```{r}
+dados <- read.csv("C:/Users/luiz_/Documentos/modulo11/InteliResultados.csv", header = TRUE, sep = ",")
+```
+
+# Iniciando a Exploração dos Dados
+
+Após carregar os dados, iniciaremos a visualização das primeiras linhas para compreender sua estrutura, identificar possíveis padrões e verificar a qualidade das informações.
+
+```{r}
+head(dados)
+```
+
+# Compreendendo a Estrutura dos Dados
+
+A função str() permite visualizar a estrutura do dataframe, incluindo os tipos de dados de cada coluna e uma visão geral do conteúdo. Essa análise é feita para identificar possíveis inconsistências e garantir que os dados estejam no formato adequado para a exploração.
+
+```{r}
+str(dados)
+```
+
+# Criando Novas Colunas para a Análise
+
+Como nosso conjunto de dados é relativamente pequeno, precisaremos criar novas colunas a partir das existentes para enriquecer nossa análise inicial.
+
+O primeiro passo será converter a coluna ID em um formato numérico. Isso nos permitirá, posteriormente, investigar possíveis correlações entre essa variável e as demais.
+
+```{r}
+dados$ID <- as.numeric(gsub("-", "", dados$ID))
+```
+
+# Refinando a Coluna de Data
+
+Em seguida, iremos transformar a coluna data de formato character (chr) para datetime. Além disso, para uma análise mais detalhada, vamos decompor essa informação em colunas mais granulares, como ano, mês, dia e hora. Isso permitirá uma exploração mais precisa e a identificação de padrões temporais nos dados.
+
+### Transformando a coluna em Datetime
+
+```{r}
+dados$CAPTURE_TIME <- strptime(dados$CAPTURE_TIME, format="%Y-%m-%d-%H.%M.%OS")
+```
+
+### Criando colunas a partir de DateTime
+
+```{r}
+dados$ano <- format(dados$CAPTURE_TIME, "%Y")
+dados$mes <- format(dados$CAPTURE_TIME, "%m")
+dados$dia <- format(dados$CAPTURE_TIME, "%d")
+dados$hora <- format(dados$CAPTURE_TIME, "%H")
+dados$minuto <- format(dados$CAPTURE_TIME, "%M")
+```
+
+### Convertendo as colunas para inteiro
+
+```{r}
+dados$ano <- as.integer(dados$ano)
+dados$mes <- as.integer(dados$mes)
+dados$dia <- as.integer(dados$dia)
+dados$hora <- as.integer(dados$hora)
+dados$minuto <- as.integer(dados$minuto)
+```
+
+### Adicionando a Coluna de Turno
+
+Também incluiremos uma nova coluna que classifica os registros por turno, conforme solicitado pelo parceiro. Essa categorização ajudará a gerar insights mais estratégicos, permitindo uma análise diferenciada dos dados ao longo do dia.
+
+```{r}
+dados$turno <- case_when(
+  dados$hora >= 23 ~ 3,
+  dados$hora >= 0 & dados$hora <  6 ~ 3,
+  dados$hora >= 6 & dados$hora < 15 ~ 1,
+  dados$hora >= 15 & dados$hora < 23 ~ 2,
+)
+```
+
+```{r}
+head(dados)
+```
+
+```{r}
+summary(dados)
+```
+
+## Descrição das Variáveis
+
+| **Variável** | **Descrição** |
+|----|----|
+| **ID** | Identificador único do evento ou registro.. |
+| **RESULT_ID** | Código identificador do tipo de resultado do evento. |
+| **RESULT_DESCRIPTION** | Descrição do resultado do evento (exemplo: "ABASTEC. CÂMBIO"). |
+| **CAPTURE_TIME** | Data e hora da captura do evento no formato `YYYY-MM-DD HH:MM:SS`. Convertido para `POSIXct` para facilitar manipulação. |
+| **STATUS** | Status do evento (exemplo: "NOK"). |
+| **ano** | Ano extraído da coluna `CAPTURE_TIME`. (`integer`) |
+| **mes** | Mês extraído da coluna `CAPTURE_TIME`. (`integer`) |
+| **dia** | Dia extraído da coluna `CAPTURE_TIME`. (`integer`) |
+| **hora** | Hora extraída da coluna `CAPTURE_TIME`. (`integer`) |
+| **minuto** | Minuto extraído da coluna `CAPTURE_TIME`. (`integer`) |
+| **turno** | Período do dia baseado na coluna `hora`: |
+
+-   `1 = Manhã (06h-14h59)`\
+-   `2 = Tarde/Noite (15h-22h59)`\
+-   `3 = Madrugada (23h-05h59)`. \|
+
+Para entender melhor os padrões temporais das capturas, vamos analisar a distribuição dos registros ao longo do dia. O histograma abaixo exibe a frequência de capturas por hora, permitindo identificar possíveis picos de atividade e momentos de menor ocorrência.
+
+Esse tipo de visualização é útil para detectar padrões sazonais e ajudar na tomada de decisões baseadas no comportamento dos dados ao longo do tempo.
+
+```{r}
+# Histogramas para as variáveis temporais (hora e minuto)
+ggplot(dados, aes(x=hora)) +
+  geom_histogram(binwidth=1, fill="blue", color="black", alpha=0.7) +
+  labs(title="Distribuição das Capturas por Hora", x="Hora do Dia", y="Frequência") +
+  scale_y_continuous(labels = scales::comma) +  # Chama a função corretamente
+  theme_minimal()
+```
+
+Além do histograma, utilizamos um gráfico de densidade para visualizar a distribuição suave das capturas ao longo do dia. Diferente do histograma, esse gráfico permite identificar padrões de concentração sem depender do tamanho das classes, fornecendo uma visão mais fluida da frequência das capturas em cada horário.
+
+Com essa abordagem, conseguimos detectar os períodos de maior e menor intensidade de capturas, auxiliando na identificação de tendências e padrões sazonais nos dados.
+
+```{r}
+# Gráfico de densidade para a variável hora
+ggplot(dados, aes(x=hora)) +
+  geom_density(fill="red", alpha=0.5) +
+  labs(title="Densidade das Capturas por Hora", x="Hora do Dia", y="Densidade") +
+  theme_minimal()
+```
+
+O boxplot abaixo tem o objetivo de comparar a distribuição das capturas ao longo do dia para cada categoria da variável STATUS. Essa visualização permite identificar variações nos horários em que os diferentes status ocorrem com maior frequência.
+
+No entanto, como todos os registros possuem apenas o status NOK, o gráfico não trará comparações entre diferentes categorias. Nesse caso, ele servirá apenas para visualizar a dispersão e possíveis padrões da variável hora dentro do status disponível.
+
+```{r}
+# Boxplot para visualizar a distribuição da variável hora por STATUS
+ggplot(dados, aes(x=STATUS, y=hora, fill=STATUS)) +
+  geom_boxplot(alpha=0.7) +
+  labs(title="Boxplot da Hora por STATUS", x="STATUS", y="Hora do Dia") +
+  theme_minimal()
+```
+
+Nesta etapa, utilizamos o método do Intervalo Interquartil (IQR) para detectar possíveis outliers nas variáveis numéricas.
+
+```{r}
+### Função para detectar outliers pelo método do IQR
+detect_outliers <- function(df, coluna) {
+  Q1 <- quantile(df[[coluna]], 0.25, na.rm = TRUE)  # Primeiro quartil
+  Q3 <- quantile(df[[coluna]], 0.75, na.rm = TRUE)  # Terceiro quartil
+  IQR_value <- Q3 - Q1  # Intervalo Interquartil
+  
+  # Definir limites superior e inferior para outliers
+  lower_bound <- Q1 - 1.5 * IQR_value
+  upper_bound <- Q3 + 1.5 * IQR_value
+  
+  # Filtrar os outliers
+  outliers <- df %>%
+    filter(df[[coluna]] < lower_bound | df[[coluna]] > upper_bound)
+  
+  return(outliers)
+}
+```
+
+```{r}
+# Criando variáveis a serem analisadas para outliers
+variaveis_numericas <- c("mes", "dia", "hora")
+```
+
+# Análise Visual com Boxplots
+
+Criamos boxplots para as variáveis mes, dia e hora, permitindo visualizar a dispersão dos dados e destacar potenciais outliers. Caso existisse, estariam representado por pontos azuis indicando possíveis valores atípicos.
+
+```{r}
+# Criando boxplots para visualizar os outliers
+for (var in variaveis_numericas) {
+  print(
+    ggplot(dados, aes(y = .data[[var]])) +
+      geom_boxplot(fill="red", alpha=0.5, outlier.color="blue", outlier.shape=16) +
+      labs(title = paste("Boxplot da variável", var), y = var) +
+      theme_minimal()
+  )
+}
+```
+
+Aqui, podemos verificar alguns padrões de ocorrências concentrados em alguns meses e uma janela de tempo dentro dos meses.
+
+O gráfico de barras abaixo apresenta a frequência de eventos em cada turno do dia. Essa visualização nos ajuda a identificar padrões e variações na quantidade de registros ao longo dos diferentes períodos.
+
+```{r}
+ggplot(dados, aes(x=factor(turno), fill=factor(turno))) +
+  geom_bar() +
+  labs(title="Distribuição dos Eventos por Turno", x="Turno", y="Frequência") +
+  theme_minimal()
+
+```
+
+Nesta seção, realizamos uma análise dos eventos mais frequentes com base na variável RESULT_DESCRIPTION. O objetivo é identificar os 10 tipos de resultados mais comuns e exibi-los de forma clara em um gráfico de barras.
+
+### Definição do Número de Categorias
+
+```{r}
+top_n_resultados <- 10
+```
+
+### Contagem de Ocorrências
+
+```{r}
+top_resultados <- dados %>%
+  count(RESULT_DESCRIPTION, name="freq") %>%
+  arrange(desc(freq)) %>%
+  head(top_n_resultados)
+```
+
+### Filtragem dos Dados
+
+```{r}
+dados_filtrados <- dados %>%
+  filter(RESULT_DESCRIPTION %in% top_resultados$RESULT_DESCRIPTION)
+```
+
+Essa visualização permite compreender rapidamente quais tipos de resultados ocorrem com maior frequência, auxiliando no entendimento dos dados.
+
+```{r}
+# Criar o gráfico de barras com apenas os resultados mais frequentes
+ggplot(dados_filtrados, aes(x=reorder(RESULT_DESCRIPTION, -table(RESULT_DESCRIPTION)[RESULT_DESCRIPTION]), fill=STATUS)) +
+  geom_bar() +
+  coord_flip() +  # Rotaciona para melhor leitura
+  labs(title=paste("Top", top_n_resultados, "Eventos por Tipo de Resultado"),
+       x="Descrição do Resultado", y="Frequência") +
+  theme_minimal()
+```
+
+### Transformando a coluna ID em um dado númerico para analise de correlação
+
+```{r}
+dados$ID <- as.numeric(dados$ID)
+```
+
+Nesta etapa, realizamos uma análise de correlação entre as variáveis numéricas do conjunto de dados. A correlação é uma medida estatística que indica o grau de associação entre duas variáveis, variando entre -1 (correlação negativa perfeita), 0 (nenhuma correlação) e 1 (correlação positiva perfeita). Essa análise é útil para identificar relações entre diferentes variáveis e pode auxiliar na modelagem preditiva e tomada de decisões.
+
+## Seleção das Variáveis Numéricas
+
+```{r}
+# Selecionar apenas as colunas numéricas para a correlação
+dados_numericos <- dados %>%
+  select(where(is.numeric))
+```
+
+## Cálculo da Matriz de Correlação
+
+```{r}
+matriz_cor <- cor(dados_numericos, use="pairwise.complete.obs")
+```
+
+## Exibição da Matriz no Console
+
+```{r}
+print(matriz_cor)
+```
+
+## Visualização Gráfica da Correlação
+
+```{r}
+# Visualizar a matriz de correlação com corrplot
+corrplot(matriz_cor, method="color", type="upper", 
+         tl.col="black", tl.cex=0.8, 
+         addCoef.col="black", number.cex=0.7)
+```
+
+A Análise de Componentes Principais (PCA - Principal Component Analysis) é uma técnica estatística utilizada para redução de dimensionalidade em conjuntos de dados com muitas variáveis correlacionadas. Nesse caso, como temos poucos dados correlacionados, não faz muito sentido uma aplicação de analise PCA. Mas adicionei uma forma de realizar essa visualização abaixo:
+
+```{r}
+# Executando o PCA (escalando os dados para padronização)
+pca_result <- prcomp(dados_numericos, center = TRUE, scale. = TRUE)
+```
+
+```{r}
+# Visualizar a importância de cada componente principal
+summary(pca_result)
+```
+
+```{r}
+fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 100)) +
+  labs(title="Variância Explicada pelos Componentes Principais")
+
+```
+
+```{r}
+fviz_pca_var(pca_result, col.var = "contrib", gradient.cols = c("blue", "red"), repel = TRUE) +
+  labs(title="Contribuição das Variáveis nos Componentes")
+```
+
+```{r}
+fviz_pca_ind(pca_result, col.ind = "cos2", gradient.cols = c("blue", "red"), repel = TRUE) +
+  labs(title="Mapa dos Registros no Espaço PCA")
+```
+
+Durante a análise exploratória dos dados, identificamos diversas limitações que dificultaram a obtenção de correlações significativas. A tabela analisada continha apenas cinco colunas, sendo duas delas IDs, uma descrição do resultado, uma data e um status, o que restringiu a profundidade da análise. Além disso, a coluna status apresentou exclusivamente registros com o valor "ÑOK", impossibilitando comparações com possíveis variações de status.
+
+Para refinar a análise, a coluna de data foi dividida em componentes individuais (ano, mês, dia e hora) e também foi criada a variável turno, com o intuito de identificar padrões temporais. Embora essa abordagem não tenha gerado insights profundos, foi possível observar que alguns horários específicos (11h, 12h e 21h) apresentam uma aparente redução na quantidade de problemas. Além disso, identificamos que o primeiro turno registra um pico maior de ocorrências de falhas, o que pode ser um indicativo de sobrecarga ou outros fatores operacionais.
+
+Apesar dessas observações, a análise de correlação entre as variáveis não revelou relações estatisticamente significativas que pudessem ajudar a entender melhor os dados, com exceção das próprias variáveis de data, que apresentaram correlações óbvias e previsíveis.
+
+A principal limitação deste estudo foi a estrutura dos dados analisados. Como cada integrante do grupo trabalhou com uma tabela específica, não foi possível cruzar informações entre diferentes tabelas para enriquecer a análise. A falta de variabilidade na coluna status (somente valores "ÑOK") também restringiu a possibilidade de identificar padrões de comportamento em diferentes condições.
+
+Outra limitação foi a baixa granularidade das variáveis disponíveis. Embora a decomposição da data tenha permitido algumas observações sobre períodos de maior ou menor incidência de falhas, ela não revelou insights conclusivos sobre as causas desses padrões.
+
+Para melhorar futuras análises, seria interessante unificar as tabelas do grupo e cruzar informações para verificar relações entre diferentes conjuntos de dados.
