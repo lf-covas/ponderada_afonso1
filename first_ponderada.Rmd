@@ -117,7 +117,7 @@ summary(dados)
 ## Descrição das Variáveis
 
 | **Variável** | **Descrição** |
-|----|----|
+|--------------------------------------------|----------------------------|
 | **ID** | Identificador único do evento ou registro.. |
 | **RESULT_ID** | Código identificador do tipo de resultado do evento. |
 | **RESULT_DESCRIPTION** | Descrição do resultado do evento (exemplo: "ABASTEC. CÂMBIO"). |
@@ -316,14 +316,16 @@ fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 100)) +
 
 ```
 
+Obs: Código para gerar a visualização não roda
 ```{r}
-fviz_pca_var(pca_result, col.var = "contrib", gradient.cols = c("blue", "red"), repel = TRUE) +
-  labs(title="Contribuição das Variáveis nos Componentes")
+##fviz_pca_var(pca_result, col.var = "contrib", gradient.cols = c("blue", "red"), repel = TRUE) +
+##  labs(title="Contribuição das Variáveis nos Componentes")
 ```
 
+Obs: Código para gerar a visualização não roda
 ```{r}
-fviz_pca_ind(pca_result, col.ind = "cos2", gradient.cols = c("blue", "red"), repel = TRUE) +
-  labs(title="Mapa dos Registros no Espaço PCA")
+##fviz_pca_ind(pca_result, col.ind = "cos2", gradient.cols = c("blue", "red"), repel = TRUE) +
+##  labs(title="Mapa dos Registros no Espaço PCA")
 ```
 
 Durante a análise exploratória dos dados, identificamos diversas limitações que dificultaram a obtenção de correlações significativas. A tabela analisada continha apenas cinco colunas, sendo duas delas IDs, uma descrição do resultado, uma data e um status, o que restringiu a profundidade da análise. Além disso, a coluna status apresentou exclusivamente registros com o valor "ÑOK", impossibilitando comparações com possíveis variações de status.
